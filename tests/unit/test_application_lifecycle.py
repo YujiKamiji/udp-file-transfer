@@ -12,7 +12,11 @@ class ApplicationLifecycleTests(unittest.TestCase):
     def test_server_keeps_receiving_after_timeout_and_closes_on_interrupt(self) -> None:
         request = encode_message(Message(MessageType.GET, 42, payload=b"file.bin"))
         output = io.StringIO()
-        with patch("server.application.UdpTransport") as transport_class:
+        with (
+            patch("server.application.UdpTransport") as transport_class,
+            patch("server.application.FileRepository") as repository_class,
+        ):
+            repository_class.return_value.open.side_effect = FileNotFoundError("missing")
             transport = transport_class.return_value.__enter__.return_value
             transport.receive.side_effect = [
                 TimeoutError(),
@@ -23,4 +27,4 @@ class ApplicationLifecycleTests(unittest.TestCase):
                 self.assertEqual(main([]), 0)
             transport_class.return_value.__exit__.assert_called_once()
         self.assertIn("file.bin", output.getvalue())
-        self.assertIn("Servidor encerrado", output.getvalue())
+        self.assertIn("servidor encerrado", output.getvalue())

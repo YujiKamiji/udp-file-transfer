@@ -5,6 +5,12 @@ from server.config import ServerConfig
 
 
 class ConfigTests(unittest.TestCase):
+    def test_drop_blocks_must_be_valid_block_numbers(self) -> None:
+        self.assertEqual(ClientConfig("file.bin", drop_blocks=(1, 3, 7)).drop_blocks, (1, 3, 7))
+        for block in (0, -1, True, 1.5, "3", 2**32 - 1):
+            with self.subTest(block=block), self.assertRaises(ValueError):
+                ClientConfig("file.bin", drop_blocks=(block,))
+
     def test_defaults_and_valid_port_boundaries(self) -> None:
         self.assertEqual(ServerConfig().host, "127.0.0.1")
         self.assertEqual(ServerConfig().timeout, 1.0)

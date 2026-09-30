@@ -1,6 +1,7 @@
 import io
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
+from pathlib import Path
 from unittest.mock import patch
 
 from client.application import main as client_main
@@ -12,6 +13,29 @@ from server.config import ServerConfig
 
 
 class CliTests(unittest.TestCase):
+    def test_parses_optional_drop_blocks(self) -> None:
+        self.assertEqual(parse_client_args(["file.bin"]).drop_blocks, ())
+        config = parse_client_args(["file.bin", "--drop-blocks", "3", "7"])
+        self.assertEqual(config.drop_blocks, (3, 7))
+
+    def test_rejects_invalid_drop_blocks_before_starting_network(self) -> None:
+        for blocks in ([], ["0"], ["-1"], ["text"], ["4294967295"]):
+            with self.subTest(blocks=blocks):
+                with patch("client.application.run") as run, redirect_stderr(io.StringIO()):
+                    with self.assertRaises(SystemExit) as caught:
+                        client_main(["file.bin", "--drop-blocks", *blocks])
+                    self.assertEqual(caught.exception.code, 2)
+                    run.assert_not_called()
+
+    def test_parses_storage_directories(self) -> None:
+        self.assertEqual(
+            parse_server_args(["--shared-dir", "my files"]).shared_dir, Path("my files")
+        )
+        self.assertEqual(
+            parse_client_args(["file.bin", "--output-dir", "my downloads"]).output_dir,
+            Path("my downloads"),
+        )
+
     def test_parses_server_defaults_and_explicit_arguments(self) -> None:
         self.assertEqual(parse_server_args([]), ServerConfig())
         config = parse_server_args(["--host", "0.0.0.0", "--port", "6000", "--timeout", "0.2"])

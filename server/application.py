@@ -1,36 +1,28 @@
 import sys
 from collections.abc import Sequence
 
-from common.protocol.codec import ProtocolError, decode_message
-from common.protocol.messages import MessageType
 from common.transport import UdpTransport
 from server.cli import parse_args
 from server.config import ServerConfig
+from server.dispatcher import TransferDispatcher
+from server.file_repository import FileRepository
 
 
 def run(config: ServerConfig) -> None:
+    repository = FileRepository(config.shared_dir)
     with UdpTransport((config.host, config.port), config.timeout) as transport:
-        print(f"Servidor UDP ativo em {config.host}:{config.port}.", flush=True)
-        print("Nesta etapa, os pedidos são registrados; arquivos ainda não são enviados.", flush=True)
-        while True:
-            try:
-                packet, sender = transport.receive()
-            except TimeoutError:
-                continue
-            try:
-                message = decode_message(packet)
-            except ProtocolError:
-                print(f"Datagrama inválido de {sender[0]}:{sender[1]} ignorado.", flush=True)
-                continue
-            if message.message_type != MessageType.GET:
-                print(f"Mensagem {message.message_type.name} sem transferência ativa ignorada.", flush=True)
-                continue
-            filename = message.payload.decode("utf-8")
-            print(
-                f"Pedido de {sender[0]}:{sender[1]}: {filename!r} "
-                f"(transferência {message.transfer_id}).",
-                flush=True,
-            )
+        print(f"servidor udp ativo em {config.host}:{config.port}.", flush=True)
+        print(f"pasta compartilhada: {repository.root}", flush=True)
+        dispatcher = TransferDispatcher(transport, repository, config.timeout)
+        try:
+            while True:
+                try:
+                    packet, sender = transport.receive()
+                except (TimeoutError, ConnectionResetError):
+                    continue
+                dispatcher.dispatch(packet, sender)
+        finally:
+            dispatcher.close()
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -38,8 +30,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         run(config)
     except KeyboardInterrupt:
-        print("\nServidor encerrado.")
+        print("\nservidor encerrado.")
     except (OSError, OverflowError) as error:
-        print(f"Erro ao executar o servidor: {error}", file=sys.stderr)
+        print(f"erro ao executar o servidor: {error}", file=sys.stderr)
         return 1
     return 0

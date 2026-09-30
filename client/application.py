@@ -4,7 +4,7 @@ from collections.abc import Sequence
 
 from client.cli import parse_args
 from client.config import ClientConfig
-from common.protocol.codec import encode_message
+from client.transfer import receive_file
 from common.protocol.messages import Message, MessageType
 from common.transport import UdpTransport
 
@@ -15,13 +15,17 @@ def run(config: ClientConfig) -> None:
         secrets.randbits(32),
         payload=config.filename.encode("utf-8"),
     )
-    with UdpTransport(("0.0.0.0", 0), config.timeout) as transport:
-        transport.send_to(encode_message(request), (config.host, config.port))
     print(
-        f"Pedido enviado para {config.host}:{config.port}: {config.filename!r} "
-        f"(transferência {request.transfer_id})."
+        f"solicitando {config.filename!r} de {config.host}:{config.port} "
+        f"(transferência {request.transfer_id}).",
+        flush=True,
     )
-    print("O recebimento pelo servidor ainda não é confirmado e nenhum arquivo foi baixado.")
+    with UdpTransport(("0.0.0.0", 0), config.timeout) as transport:
+        destination = receive_file(
+            transport, (config.host, config.port), request, config.output_dir,
+            config.timeout, config.drop_blocks,
+        )
+    print(f"download concluído: {destination.resolve()}")
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -29,9 +33,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         run(config)
     except KeyboardInterrupt:
-        print("\nCliente interrompido.", file=sys.stderr)
+        print("\ncliente interrompido.", file=sys.stderr)
         return 130
-    except (OSError, OverflowError) as error:
-        print(f"Erro ao executar o cliente: {error}", file=sys.stderr)
+    except (OSError, ValueError, OverflowError) as error:
+        print(f"erro ao executar o cliente: {error}", file=sys.stderr)
         return 1
     return 0
