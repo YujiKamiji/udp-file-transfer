@@ -129,6 +129,28 @@ class FileWriterTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             writer.finalize()
 
+    def test_cleanup_when_closing_the_file_reports_a_disk_error(self) -> None:
+        for finalize in (False, True):
+            with self.subTest(finalize=finalize):
+                writer = FileWriter(self.destination, self.metadata_for(b"data"))
+                writer.write_block(1, b"data")
+                close = writer._file.close
+
+                def fail_to_close() -> None:
+                    close()
+                    raise OSError("disk full")
+
+                with patch.object(writer._file, "close", side_effect=fail_to_close):
+                    with self.assertRaisesRegex(OSError, "disk full"):
+                        if finalize:
+                            writer.finalize()
+                        else:
+                            writer.close()
+                self.assertTrue(writer._file.closed)
+                self.assertFalse(writer.partial_path.exists())
+                self.assertFalse(self.destination.exists())
+                writer.close()
+
     def test_closing_an_old_writer_does_not_remove_a_new_partial(self) -> None:
         previous = FileWriter(self.destination, self.metadata_for(b"data"))
         previous.close()

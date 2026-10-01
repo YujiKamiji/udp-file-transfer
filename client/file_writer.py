@@ -51,8 +51,8 @@ class FileWriter:
             checksum = calculate_checksum(data, checksum)
         if size != self.metadata.file_size or checksum != self.metadata.checksum:
             raise ValueError("o tamanho ou crc32 do arquivo recebido está incorreto.")
-        self._file.close()
         try:
+            self._file.close()
             if os.path.lexists(self.destination):
                 raise FileExistsError("já existe um arquivo no destino.")
             self.partial_path.rename(self.destination)
@@ -64,8 +64,10 @@ class FileWriter:
 
     def close(self) -> None:
         if not self._file.closed:
-            self._file.close()
-            self.partial_path.unlink(missing_ok=True)
+            try:
+                self._file.close()
+            finally:
+                self.partial_path.unlink(missing_ok=True)
 
     def __enter__(self) -> "FileWriter":
         return self
