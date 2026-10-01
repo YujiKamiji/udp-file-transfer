@@ -1,3 +1,8 @@
+
+
+#tipo (1 byte) | identificador (4 bytes) | sequência (4 bytes) | crc32 (4 bytes) | conteúdo
+
+
 import struct
 
 from common.protocol.integrity import calculate_checksum
